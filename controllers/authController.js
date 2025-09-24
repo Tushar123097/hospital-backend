@@ -12,32 +12,40 @@ export const signup = async (req, res) => {
   const { name, email, role } = req.body;
 
   try {
+    // 1️⃣ Check if user exists
     let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ error: "User already exists" });
-    }
+    if (user) return res.status(400).json({ error: "User already exists" });
 
-    const password = generatePassword();
+    // 2️⃣ Generate random password
+    const password = Math.random().toString(36).slice(-8);
 
-    // Save user
+    // 3️⃣ Save user to DB
     user = new User({ name, email, password, role });
     await user.save();
 
-    // Send password to email
-    const info = await transporter.sendMail({
-      from: `"MyApp Team" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Your App Password",
-      text: `Hello ${name},\n\nYour password is: ${password}\n\nUse this to login.`,
-    });
-    console.log("Signup email sent:", info.messageId);
+    // 4️⃣ Send password email (wrap in try/catch)
+    try {
+      const info = await transporter.sendMail({
+        from: `"MyApp Team" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: "Your App Password",
+        text: `Hello ${name},\n\nYour password is: ${password}\n\nUse this to login.`,
+      });
+      console.log("Signup email sent:", info.messageId);
+    } catch (emailErr) {
+      console.error("Signup email failed:", emailErr.message);
+      // Do NOT throw error, signup continues
+    }
 
-    res.json({ message: "User created & password sent to email" });
+    // 5️⃣ Return response
+    res.status(201).json({ message: "User created & password sent to email (if email worked)" });
+
   } catch (err) {
     console.error("Signup error:", err.message);
     res.status(500).json({ error: "Signup failed", details: err.message });
   }
 };
+
 
 // -------------------- LOGIN --------------------
 export const login = async (req, res) => {
