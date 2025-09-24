@@ -1,6 +1,6 @@
-const User = require("../models/User");
-const jwt = require("jsonwebtoken");
-const transporter = require("../config/nodemailer");
+import jwt from "jsonwebtoken";
+import transporter from "../config/nodemailer.js";
+import User from "../models/User.js";
 
 // Helper: Generate random password
 function generatePassword() {
@@ -8,7 +8,7 @@ function generatePassword() {
 }
 
 // -------------------- SIGNUP --------------------
-exports.signup = async (req, res) => {
+export const signup = async (req, res) => {
   const { name, email, role } = req.body;
 
   try {
@@ -24,22 +24,23 @@ exports.signup = async (req, res) => {
     await user.save();
 
     // Send password to email
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"MyApp Team" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Your App Password",
       text: `Hello ${name},\n\nYour password is: ${password}\n\nUse this to login.`,
     });
+    console.log("Signup email sent:", info.messageId);
 
     res.json({ message: "User created & password sent to email" });
   } catch (err) {
-    console.error("Signup error:", err);
+    console.error("Signup error:", err.message);
     res.status(500).json({ error: "Signup failed", details: err.message });
   }
 };
 
 // -------------------- LOGIN --------------------
-exports.login = async (req, res) => {
+export const login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
@@ -60,3 +61,22 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: "Login failed" });
   }
 };
+
+// Get user profile
+export const getProfile = async (req, res) => {
+  try {
+    // `req.user` will be set by protect middleware
+    const user = await User.findById(req.user.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export default { signup, login, getProfile };

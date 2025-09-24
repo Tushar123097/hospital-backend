@@ -1,6 +1,6 @@
 const Appointment = require("../models/Appointment");
 
-// ✅ Patient: Get my appointments
+//  Patient: Get my appointments
 const getMyAppointments = async (req, res) => {
   try {
     const appointments = await Appointment.find({ patient: req.user.id })

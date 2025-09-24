@@ -1,12 +1,8 @@
-const express = require("express");
-const Appointment = require("../models/Appointment");
-const protect = require("../middleware/authMiddleware");
-// const transporter = require("../nodemailerTransporter");
-// const transporter = require("../config/nodemailerTransporter");
-const transporter = require("../config/nodemailer");
-
-const User = require("../models/User");
-// const Appointment = require("../models/Appointment");
+import express from "express";
+import Appointment from "../models/Appointment.js";
+import { protect } from "../middleware/authMiddleware.js";
+import transporter from "../config/nodemailer.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
@@ -16,11 +12,24 @@ const router = express.Router();
  */
 router.post("/book", protect, async (req, res) => {
   try {
+    console.log("=== BOOKING REQUEST ===");
+    console.log("User:", req.user);
+    console.log("Request body:", req.body);
+    
     const { doctorId, date } = req.body;
 
     if (!doctorId || !date) {
+      console.log("Missing required fields:", { doctorId, date });
       return res.status(400).json({ error: "DoctorId and Date are required" });
     }
+
+    // Check if doctor exists
+    const doctorExists = await User.findById(doctorId);
+    if (!doctorExists) {
+      console.log("Doctor not found:", doctorId);
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+    console.log("Doctor found:", doctorExists.name);
 
     // Normalize date to only YYYY-MM-DD (ignore time)
     const appointmentDate = new Date(date);
@@ -44,21 +53,24 @@ router.post("/book", protect, async (req, res) => {
     });
 
     await appointment.save();
+    console.log("Appointment saved successfully:", appointment._id);
 
-    // -------------------- SEND EMAIL --------------------
-    const patient = await User.findById(req.user.id);
-    const doctor = await User.findById(doctorId);
+    // -------------------- SEND EMAIL (OPTIONAL) --------------------
+    let emailSent = false;
+    try {
+      const patient = await User.findById(req.user.id);
+      const doctor = await User.findById(doctorId);
 
-    // Estimate time (example: each token = 15 min)
-    const estimatedTime = new Date(appointmentDate);
-    estimatedTime.setHours(9, 0, 0); // Start at 9:00 AM
-    estimatedTime.setMinutes(estimatedTime.getMinutes() + (nextToken - 1) * 15);
+      // Estimate time (example: each token = 15 min)
+      const estimatedTime = new Date(appointmentDate);
+      estimatedTime.setHours(9, 0, 0); // Start at 9:00 AM
+      estimatedTime.setMinutes(estimatedTime.getMinutes() + (nextToken - 1) * 15);
 
-    await transporter.sendMail({
-      from: `"Hospital Appointment" <${process.env.EMAIL_USER}>`,
-      to: patient.email,
-      subject: "Your Appointment is Confirmed",
-      text: `Hello,
+      await transporter.sendMail({
+        from: `"Hospital Appointment" <${process.env.EMAIL_USER}>`,
+        to: patient.email,
+        subject: "Your Appointment is Confirmed",
+        text: `Hello,
 
 Your appointment is confirmed!
 Doctor: ${doctor.name}
@@ -67,7 +79,14 @@ Token Number: ${nextToken}
 Approx Time: ${estimatedTime.toTimeString().slice(0,5)}
 
 Thank you.`,
-    });
+      });
+      
+      emailSent = true;
+      console.log("Email sent successfully to:", patient.email);
+    } catch (emailError) {
+      console.error("Email sending failed (but appointment was created):", emailError.message);
+      // Don't throw error - appointment was created successfully
+    }
 
     res.json({
       message: "Appointment booked successfully & email sent",
@@ -79,8 +98,10 @@ Thank you.`,
       },
     });
   } catch (err) {
-    console.error("Book error:", err.message);
-    res.status(500).json({ error: "Booking failed" });
+    console.error("=== BOOKING ERROR ===");
+    console.error("Error message:", err.message);
+    console.error("Full error:", err);
+    res.status(500).json({ error: "Booking failed", details: err.message });
   }
 });
 
@@ -212,4 +233,4 @@ router.get("/dashboard", protect, async (req, res) => {
 
 
 
-module.exports = router;
+export default router;
